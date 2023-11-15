@@ -13,9 +13,13 @@ EOF
 }
 
 procesar_respuesta() {
-    echo "ya me contestó el trabajador"
-    exit 0
+	for proceso in "${pid_trabajadores[@]}"; do
+		kill "$proceso"
+	done
+	rm "$ruta_ejecucion"/archivoTrabajador*
 }
+
+trap procesar_respuesta USR1
 
 main() {
 	local archivo="$1"
@@ -26,17 +30,29 @@ main() {
 	local numLineasDic=$(cat "$diccionario" | wc -l)
 	local divisionTrabajo
 	let divisionTrabajo=$numLineasDic/$procesadores
-	echo $divisionTrabajo
 
+	
 	local algoritmo=$(cat "$archivo" | grep -Po "^$usuario:.\K.")
 	local salt=$(cat "$archivo" | grep -Po "^$usuario:...\K([A-z0-9].)+")
-	echo $algoritmo
-	echo $salt
-	local hash=$(cat "$archivo" | grep -Po "^$usuario:...([A-z0-9].)+.\K([A-z0-9])+")	
-	echo $hash
+	hash_pass=$(cat shadow | grep -Po 'test:\K\$[^:]+')
 	ruta_ejecucion="${0%/*}"
-	"$ruta_ejecucion"/worker.sh &
-	
+	local contador=1
+	local diccionarioTrabajador
+	pid_trabajadores=( )
+	while [ "$contador" -lt "$procesadores" ]; do
+		if [ "$contador" -eq 1 ]; then 
+			diccionarioTrabajador=$(cat < "$diccionario" | head -n "$divisionTrabajo")
+			echo "$diccionarioTrabajador" >> "$ruta_ejecucion"/archivoTrabajador"$contador"
+		else
+			diccionarioTrabajador=$(cat < "$diccionario" | head -n $(( divisionTrabajo * contador )) | tail -n "$divisionTrabajo")
+			echo "$diccionarioTrabajador" >> "$ruta_ejecucion"/archivoTrabajador"$contador"
+		fi
+		"$ruta_ejecucion"/worker.sh "$ruta_ejecucion"/archivoTrabajador"$contador" "$salt" "$algoritmo" "$hash_pass" &
+		pid=$!
+		pid_trabajadores+=( "$pid" )
+		let contador=contador+1
+	done
+	wait
 }
 archivo="$1"
 usuario="$2"
@@ -53,5 +69,4 @@ procesadores="$4"
 
 main "$archivo" "$usuario" "$diccionario" "$procesadores"
 
-#pid_trabajador=$!
 #pid_padre=$(ps -ef | grep -Po "^[^ ]+ +$$ +\K[^ ]+")
