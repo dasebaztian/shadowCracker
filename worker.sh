@@ -7,7 +7,7 @@ hash_pass="$4"
 pid=$(ps -o ppid= -p $$)
 check_hash() {
 	while read -r linea ; do
-		hash_test=$(sudo openssl passwd -"$algoritmo" -salt "$salt" "$linea")
+		hash_test=$(openssl passwd -"$algoritmo" -salt "$salt" "$linea")
 		if [ "$hash_test" == "$hash_pass" ]; then
 			echo "La contraseña es: $linea"
 			kill -s USR1 "$pid"
